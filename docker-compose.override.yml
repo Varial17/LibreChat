@@ -23,8 +23,6 @@
 # ---------------------------------------------------
 
 services:
-
-# # USE LIBRECHAT CONFIG FILE
   api:
     volumes:
     - type: bind
