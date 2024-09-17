@@ -38,7 +38,7 @@ jobs:
 
       # Log in to GitHub Container Registry
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -64,8 +64,8 @@ jobs:
           file: ${{ matrix.file }}
           push: true
           tags: |
-            ghcr.io/${{ github.repository_owner }}/${{ matrix.image_name }}:${{ github.sha }}
-            ghcr.io/${{ github.repository_owner }}/${{ matrix.image_name }}:latest
+            ghcr.io/${{ github.repository_owner | lower }}/${{ matrix.image_name }}:${{ github.sha }}
+            ghcr.io/${{ github.repository_owner | lower }}/${{ matrix.image_name }}:latest
             ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image_name }}:${{ github.sha }}
             ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image_name }}:latest
           platforms: linux/amd64,linux/arm64
