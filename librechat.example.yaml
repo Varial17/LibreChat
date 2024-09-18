@@ -122,7 +122,7 @@ endpoints:
         fetch: false
       titleConvo: true
       titleModel: 'mixtral-8x7b-32768'
-      modelDisplayLabel: 'groq'
+      modelDisplayLabel: 'Groq'
 
     # Mistral AI Example
     - name: 'Mistral' # Unique name for the endpoint
