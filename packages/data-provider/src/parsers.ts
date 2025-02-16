@@ -13,13 +13,11 @@ import {
   gptPluginsSchema,
   // agentsSchema,
   compactAgentsSchema,
-  compactOpenAISchema,
   compactGoogleSchema,
   compactChatGPTSchema,
   chatGPTBrowserSchema,
   compactPluginsSchema,
   compactAssistantSchema,
-  compactAnthropicSchema,
 } from './schemas';
 import { bedrockInputSchema } from './bedrock';
 import { alternateName } from './config';
@@ -185,7 +183,7 @@ export const parseConvo = ({
   possibleValues,
 }: {
   endpoint: EModelEndpoint;
-  endpointType?: EModelEndpoint;
+  endpointType?: EModelEndpoint | null;
   conversation: Partial<s.TConversation | s.TPreset> | null;
   possibleValues?: TPossibleValues;
   // TODO: POC for default schema
@@ -222,13 +220,16 @@ export const getResponseSender = (endpointOption: t.TEndpointOption): string => 
     model: _m,
     endpoint,
     endpointType,
-    modelDisplayLabel,
-    chatGptLabel,
-    modelLabel,
+    modelDisplayLabel: _mdl,
+    chatGptLabel: _cgl,
+    modelLabel: _ml,
     jailbreak,
   } = endpointOption;
 
   const model = _m ?? '';
+  const modelDisplayLabel = _mdl ?? '';
+  const chatGptLabel = _cgl ?? '';
+  const modelLabel = _ml ?? '';
   if (
     [
       EModelEndpoint.openAI,
@@ -240,6 +241,8 @@ export const getResponseSender = (endpointOption: t.TEndpointOption): string => 
   ) {
     if (chatGptLabel) {
       return chatGptLabel;
+    } else if (modelLabel) {
+      return modelLabel;
     } else if (model && /\bo1\b/i.test(model)) {
       return 'o1';
     } else if (model && model.includes('gpt-3')) {
@@ -259,17 +262,17 @@ export const getResponseSender = (endpointOption: t.TEndpointOption): string => 
   }
 
   if (endpoint === EModelEndpoint.anthropic) {
-    return modelLabel ?? 'Claude';
+    return modelLabel || 'Claude';
   }
 
   if (endpoint === EModelEndpoint.bedrock) {
-    return modelLabel ?? alternateName[endpoint];
+    return modelLabel || alternateName[endpoint];
   }
 
   if (endpoint === EModelEndpoint.google) {
     if (modelLabel) {
       return modelLabel;
-    } else if (model && model.includes('gemini')) {
+    } else if (model && (model.includes('gemini') || model.includes('learnlm'))) {
       return 'Gemini';
     } else if (model && model.includes('code')) {
       return 'Codey';
@@ -302,20 +305,20 @@ export const getResponseSender = (endpointOption: t.TEndpointOption): string => 
 };
 
 type CompactEndpointSchema =
-  | typeof compactOpenAISchema
+  | typeof openAISchema
   | typeof compactAssistantSchema
   | typeof compactAgentsSchema
   | typeof compactGoogleSchema
   | typeof bingAISchema
-  | typeof compactAnthropicSchema
+  | typeof anthropicSchema
   | typeof compactChatGPTSchema
   | typeof bedrockInputSchema
   | typeof compactPluginsSchema;
 
 const compactEndpointSchemas: Record<string, CompactEndpointSchema> = {
-  [EModelEndpoint.openAI]: compactOpenAISchema,
-  [EModelEndpoint.azureOpenAI]: compactOpenAISchema,
-  [EModelEndpoint.custom]: compactOpenAISchema,
+  [EModelEndpoint.openAI]: openAISchema,
+  [EModelEndpoint.azureOpenAI]: openAISchema,
+  [EModelEndpoint.custom]: openAISchema,
   [EModelEndpoint.assistants]: compactAssistantSchema,
   [EModelEndpoint.azureAssistants]: compactAssistantSchema,
   [EModelEndpoint.agents]: compactAgentsSchema,
@@ -323,7 +326,7 @@ const compactEndpointSchemas: Record<string, CompactEndpointSchema> = {
   [EModelEndpoint.bedrock]: bedrockInputSchema,
   /* BingAI needs all fields */
   [EModelEndpoint.bingAI]: bingAISchema,
-  [EModelEndpoint.anthropic]: compactAnthropicSchema,
+  [EModelEndpoint.anthropic]: anthropicSchema,
   [EModelEndpoint.chatGPTBrowser]: compactChatGPTSchema,
   [EModelEndpoint.gptPlugins]: compactPluginsSchema,
 };
@@ -335,7 +338,7 @@ export const parseCompactConvo = ({
   possibleValues,
 }: {
   endpoint?: EModelEndpoint;
-  endpointType?: EModelEndpoint;
+  endpointType?: EModelEndpoint | null;
   conversation: Partial<s.TConversation | s.TPreset>;
   possibleValues?: TPossibleValues;
   // TODO: POC for default schema
@@ -345,7 +348,7 @@ export const parseCompactConvo = ({
     throw new Error(`undefined endpoint: ${endpoint}`);
   }
 
-  let schema = compactEndpointSchemas[endpoint];
+  let schema = compactEndpointSchemas[endpoint] as CompactEndpointSchema | undefined;
 
   if (!schema && !endpointType) {
     throw new Error(`Unknown endpoint: ${endpoint}`);
@@ -353,7 +356,11 @@ export const parseCompactConvo = ({
     schema = compactEndpointSchemas[endpointType];
   }
 
-  const convo = schema.parse(conversation) as s.TConversation;
+  if (!schema) {
+    throw new Error(`Unknown endpointType: ${endpointType}`);
+  }
+
+  const convo = schema.parse(conversation) as s.TConversation | null;
   // const { models, secondaryModels } = possibleValues ?? {};
   const { models } = possibleValues ?? {};
 

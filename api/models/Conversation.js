@@ -15,6 +15,19 @@ const searchConversation = async (conversationId) => {
     throw new Error('Error searching conversation');
   }
 };
+/**
+ * Searches for a conversation by conversationId and returns associated file ids.
+ * @param {string} conversationId - The conversation's ID.
+ * @returns {Promise<string[] | null>}
+ */
+const getConvoFiles = async (conversationId) => {
+  try {
+    return (await Conversation.findOne({ conversationId }, 'files').lean())?.files ?? [];
+  } catch (error) {
+    logger.error('[getConvoFiles] Error getting conversation files', error);
+    throw new Error('Error getting conversation files');
+  }
+};
 
 /**
  * Retrieves a single conversation for a given user and conversation ID.
@@ -31,9 +44,40 @@ const getConvo = async (user, conversationId) => {
   }
 };
 
+const deleteNullOrEmptyConversations = async () => {
+  try {
+    const filter = {
+      $or: [
+        { conversationId: null },
+        { conversationId: '' },
+        { conversationId: { $exists: false } },
+      ],
+    };
+
+    const result = await Conversation.deleteMany(filter);
+
+    // Delete associated messages
+    const messageDeleteResult = await deleteMessages(filter);
+
+    logger.info(
+      `[deleteNullOrEmptyConversations] Deleted ${result.deletedCount} conversations and ${messageDeleteResult.deletedCount} messages`,
+    );
+
+    return {
+      conversations: result,
+      messages: messageDeleteResult,
+    };
+  } catch (error) {
+    logger.error('[deleteNullOrEmptyConversations] Error deleting conversations', error);
+    throw new Error('Error deleting conversations with null or empty conversationId');
+  }
+};
+
 module.exports = {
   Conversation,
+  getConvoFiles,
   searchConversation,
+  deleteNullOrEmptyConversations,
   /**
    * Saves a conversation to the database.
    * @param {Object} req - The request object.
@@ -52,6 +96,7 @@ module.exports = {
         update.conversationId = newConversationId;
       }
 
+      /** Note: the resulting Model object is necessary for Meilisearch operations */
       const conversation = await Conversation.findOneAndUpdate(
         { conversationId, user: req.user.id },
         update,

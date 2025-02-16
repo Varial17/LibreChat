@@ -1,14 +1,16 @@
 import { Search } from 'lucide-react';
 import { useRecoilValue } from 'recoil';
 import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
+import { QueryKeys, Constants } from 'librechat-data-provider';
 import { useGetEndpointsQuery } from 'librechat-data-provider/react-query';
-import type { TConversation } from 'librechat-data-provider';
+import type { TConversation, TMessage } from 'librechat-data-provider';
 import { getEndpointField, getIconEndpoint, getIconKey } from '~/utils';
 import { icons } from '~/components/Chat/Menus/Endpoints/Icons';
 import ConvoIconURL from '~/components/Endpoints/ConvoIconURL';
 import { useLocalize, useNewConvo } from '~/hooks';
-import { TooltipAnchor } from '~/components/ui';
 import { NewChatIcon } from '~/components/svg';
+import { cn } from '~/utils';
 import store from '~/store';
 
 const NewChatButtonIcon = ({ conversation }: { conversation: TConversation | null }) => {
@@ -35,7 +37,12 @@ const NewChatButtonIcon = ({ conversation }: { conversation: TConversation | nul
   return (
     <div className="h-7 w-7 flex-shrink-0">
       {iconURL && iconURL.includes('http') ? (
-        <ConvoIconURL preset={conversation} endpointIconURL={iconURL} context="nav" />
+        <ConvoIconURL
+          iconURL={iconURL}
+          modelLabel={conversation?.chatGptLabel ?? conversation?.modelLabel ?? ''}
+          endpointIconURL={iconURL}
+          context="nav"
+        />
       ) : (
         <div className="shadow-stroke relative flex h-full items-center justify-center rounded-full bg-white text-black">
           {endpoint && Icon != null && (
@@ -58,11 +65,14 @@ export default function NewChat({
   index = 0,
   toggleNav,
   subHeaders,
+  isSmallScreen,
 }: {
   index?: number;
   toggleNav: () => void;
   subHeaders?: React.ReactNode;
+  isSmallScreen: boolean;
 }) {
+  const queryClient = useQueryClient();
   /** Note: this component needs an explicit index passed if using more than one */
   const { newConversation: newConvo } = useNewConvo(index);
   const navigate = useNavigate();
@@ -73,6 +83,10 @@ export default function NewChat({
   const clickHandler = (event: React.MouseEvent<HTMLAnchorElement>) => {
     if (event.button === 0 && !(event.ctrlKey || event.metaKey)) {
       event.preventDefault();
+      queryClient.setQueryData<TMessage[]>(
+        [QueryKeys.messages, conversation?.conversationId ?? Constants.NEW_CONVO],
+        [],
+      );
       newConvo();
       navigate('/c/new');
       toggleNav();
@@ -85,9 +99,12 @@ export default function NewChat({
         <a
           href="/"
           tabIndex={0}
-          data-testid="nav-new-chat"
+          data-testid="nav-new-chat-button"
           onClick={clickHandler}
-          className="group flex h-10 items-center gap-2 rounded-lg px-2 font-medium transition-colors duration-200 hover:bg-surface-hover"
+          className={cn(
+            'group flex h-10 items-center gap-2 rounded-lg px-2 font-medium transition-colors duration-200 hover:bg-surface-hover',
+            isSmallScreen ? 'h-14' : '',
+          )}
           aria-label={localize('com_ui_new_chat')}
         >
           <NewChatButtonIcon conversation={conversation} />
@@ -96,15 +113,7 @@ export default function NewChat({
           </div>
           <div className="flex gap-3">
             <span className="flex items-center" data-state="closed">
-              <TooltipAnchor
-                side="right"
-                id="nav-new-chat-btn"
-                aria-label="nav-new-chat-btn"
-                description={localize('com_ui_new_chat')}
-                className="text-text-primary"
-              >
-                <NewChatIcon className="size-5" />
-              </TooltipAnchor>
+              <NewChatIcon className="size-5" />
             </span>
           </div>
         </a>

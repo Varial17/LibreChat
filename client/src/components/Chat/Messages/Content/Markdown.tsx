@@ -1,4 +1,4 @@
-import React, { memo, useMemo } from 'react';
+import React, { memo, useMemo, useRef, useEffect } from 'react';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import supersub from 'remark-supersub';
@@ -8,12 +8,18 @@ import ReactMarkdown from 'react-markdown';
 import rehypeHighlight from 'rehype-highlight';
 import remarkDirective from 'remark-directive';
 import type { Pluggable } from 'unified';
+import {
+  useToastContext,
+  ArtifactProvider,
+  CodeBlockProvider,
+  useCodeBlockContext,
+} from '~/Providers';
 import { Artifact, artifactPlugin } from '~/components/Artifacts/Artifact';
 import { langSubset, preprocessLaTeX, handleDoubleClick } from '~/utils';
 import CodeBlock from '~/components/Messages/Content/CodeBlock';
+import Thinking from '~/components/Artifacts/Thinking';
 import { useFileDownload } from '~/data-provider';
 import useLocalize from '~/hooks/useLocalize';
-import { useToastContext } from '~/Providers';
 import store from '~/store';
 
 type TCodeProps = {
@@ -23,6 +29,32 @@ type TCodeProps = {
 };
 
 export const code: React.ElementType = memo(({ className, children }: TCodeProps) => {
+  const match = /language-(\w+)/.exec(className ?? '');
+  const lang = match && match[1];
+  const isMath = lang === 'math';
+  const isSingleLine = typeof children === 'string' && children.split('\n').length === 1;
+
+  const { getNextIndex, resetCounter } = useCodeBlockContext();
+  const blockIndex = useRef(getNextIndex(isMath || isSingleLine)).current;
+
+  useEffect(() => {
+    resetCounter();
+  }, [children, resetCounter]);
+
+  if (isMath) {
+    return children;
+  } else if (isSingleLine) {
+    return (
+      <code onDoubleClick={handleDoubleClick} className={className}>
+        {children}
+      </code>
+    );
+  } else {
+    return <CodeBlock lang={lang ?? 'text'} codeChildren={children} blockIndex={blockIndex} />;
+  }
+});
+
+export const codeNoExecution: React.ElementType = memo(({ className, children }: TCodeProps) => {
   const match = /language-(\w+)/.exec(className ?? '');
   const lang = match && match[1];
 
@@ -35,7 +67,7 @@ export const code: React.ElementType = memo(({ className, children }: TCodeProps
       </code>
     );
   } else {
-    return <CodeBlock lang={lang ?? 'text'} codeChildren={children} />;
+    return <CodeBlock lang={lang ?? 'text'} codeChildren={children} allowExecution={false} />;
   }
 });
 
@@ -45,7 +77,11 @@ export const a: React.ElementType = memo(
     const { showToast } = useToastContext();
     const localize = useLocalize();
 
-    const { file_id, filename, filepath } = useMemo(() => {
+    const {
+      file_id = '',
+      filename = '',
+      filepath,
+    } = useMemo(() => {
       const pattern = new RegExp(`(?:files|outputs)/${user?.id}/([^\\s]+)`);
       const match = href.match(pattern);
       if (match && match[0]) {
@@ -121,13 +157,13 @@ type TContentProps = {
 
 const Markdown = memo(({ content = '', showCursor, isLatestMessage }: TContentProps) => {
   const LaTeXParsing = useRecoilValue<boolean>(store.LaTeXParsing);
-  const codeArtifacts = useRecoilValue<boolean>(store.codeArtifacts);
 
   const isInitializing = content === '';
 
   let currentContent = content;
   if (!isInitializing) {
-    currentContent = currentContent.replace('z-index: 1;', '') || '';
+    currentContent = currentContent.replace('<think>', ':::thinking') || '';
+    currentContent = currentContent.replace('</think>', ':::') || '';
     currentContent = LaTeXParsing ? preprocessLaTeX(currentContent) : currentContent;
   }
 
@@ -153,36 +189,39 @@ const Markdown = memo(({ content = '', showCursor, isLatestMessage }: TContentPr
     );
   }
 
-  const remarkPlugins: Pluggable[] = codeArtifacts
-    ? [
-      supersub,
-      remarkGfm,
-      [remarkMath, { singleDollarTextMath: true }],
-      remarkDirective,
-      artifactPlugin,
-    ]
-    : [supersub, remarkGfm, [remarkMath, { singleDollarTextMath: true }]];
+  const remarkPlugins: Pluggable[] = [
+    supersub,
+    remarkGfm,
+    remarkDirective,
+    artifactPlugin,
+    [remarkMath, { singleDollarTextMath: true }],
+  ];
 
   return (
-    <ReactMarkdown
-      /** @ts-ignore */
-      remarkPlugins={remarkPlugins}
-      /* @ts-ignore */
-      rehypePlugins={rehypePlugins}
-      // linkTarget="_new"
-      components={
-        {
-          code,
-          a,
-          p,
-          artifact: Artifact,
-        } as {
-          [nodeType: string]: React.ElementType;
-        }
-      }
-    >
-      {isLatestMessage && showCursor === true ? currentContent + cursor : currentContent}
-    </ReactMarkdown>
+    <ArtifactProvider>
+      <CodeBlockProvider>
+        <ReactMarkdown
+          /** @ts-ignore */
+          remarkPlugins={remarkPlugins}
+          /* @ts-ignore */
+          rehypePlugins={rehypePlugins}
+          // linkTarget="_new"
+          components={
+            {
+              code,
+              a,
+              p,
+              artifact: Artifact,
+              thinking: Thinking,
+            } as {
+              [nodeType: string]: React.ElementType;
+            }
+          }
+        >
+          {isLatestMessage && showCursor === true ? currentContent + cursor : currentContent}
+        </ReactMarkdown>
+      </CodeBlockProvider>
+    </ArtifactProvider>
   );
 });
 

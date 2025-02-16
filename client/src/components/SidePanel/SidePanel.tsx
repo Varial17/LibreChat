@@ -6,15 +6,15 @@ import {
   useGetStartupConfig,
   useUserKeyQuery,
 } from 'librechat-data-provider/react-query';
+import type { TEndpointsConfig, TInterfaceConfig } from 'librechat-data-provider';
 import type { ImperativePanelHandle } from 'react-resizable-panels';
-import type { TEndpointsConfig } from 'librechat-data-provider';
 import { ResizableHandleAlt, ResizablePanel, ResizablePanelGroup } from '~/components/ui/Resizable';
 import { useMediaQuery, useLocalStorage, useLocalize } from '~/hooks';
 import useSideNavLinks from '~/hooks/Nav/useSideNavLinks';
 import NavToggle from '~/components/Nav/NavToggle';
+import { cn, getEndpointField } from '~/utils';
 import { useChatContext } from '~/Providers';
 import Switcher from './Switcher';
-import { cn } from '~/utils';
 import Nav from './Nav';
 
 interface SidePanelProps {
@@ -65,7 +65,7 @@ const SidePanel = ({
   const { data: endpointsConfig = {} as TEndpointsConfig } = useGetEndpointsQuery();
   const { data: startupConfig } = useGetStartupConfig();
   const interfaceConfig = useMemo(
-    () => startupConfig?.interface ?? defaultInterface,
+    () => (startupConfig?.interface ?? defaultInterface) as Partial<TInterfaceConfig>,
     [startupConfig],
   );
 
@@ -81,6 +81,10 @@ const SidePanel = ({
     return typeof activePanel === 'string' ? activePanel : undefined;
   }, []);
 
+  const endpointType = useMemo(
+    () => getEndpointField(endpointsConfig, endpoint, 'type'),
+    [endpoint, endpointsConfig],
+  );
   const assistants = useMemo(() => endpointsConfig?.[endpoint ?? ''], [endpoint, endpointsConfig]);
   const agents = useMemo(() => endpointsConfig?.[endpoint ?? ''], [endpoint, endpointsConfig]);
 
@@ -108,21 +112,22 @@ const SidePanel = ({
     hidePanel,
     assistants,
     keyProvided,
+    endpointType,
     interfaceConfig,
   });
 
   const calculateLayout = useCallback(() => {
-    if (!artifacts) {
+    if (artifacts == null) {
       const navSize = defaultLayout.length === 2 ? defaultLayout[1] : defaultLayout[2];
       return [100 - navSize, navSize];
     } else {
-      const navSize = Math.max(minSize, navCollapsedSize);
+      const navSize = 0;
       const remainingSpace = 100 - navSize;
       const newMainSize = Math.floor(remainingSpace / 2);
       const artifactsSize = remainingSpace - newMainSize;
       return [newMainSize, artifactsSize, navSize];
     }
-  }, [artifacts, defaultLayout, minSize, navCollapsedSize]);
+  }, [artifacts, defaultLayout]);
 
   const currentLayout = useMemo(() => normalizeLayout(calculateLayout()), [calculateLayout]);
 
@@ -178,7 +183,7 @@ const SidePanel = ({
       <ResizablePanelGroup
         direction="horizontal"
         onLayout={(sizes) => throttledSaveLayout(sizes)}
-        className="transition-width relative h-full w-full flex-1 overflow-auto bg-white dark:bg-gray-800"
+        className="transition-width relative h-full w-full flex-1 overflow-auto bg-presentation"
       >
         <ResizablePanel
           defaultSize={currentLayout[0]}
@@ -190,7 +195,7 @@ const SidePanel = ({
         </ResizablePanel>
         {artifacts != null && (
           <>
-            <ResizableHandleAlt withHandle className="ml-3 bg-border-medium dark:text-white" />
+            <ResizableHandleAlt withHandle className="ml-3 bg-border-medium text-text-primary" />
             <ResizablePanel
               defaultSize={currentLayout[1]}
               minSize={minSizeMain}
@@ -222,7 +227,7 @@ const SidePanel = ({
           />
         </div>
         {(!isCollapsed || minSize > 0) && !isSmallScreen && !fullCollapse && (
-          <ResizableHandleAlt withHandle className="bg-transparent dark:text-white" />
+          <ResizableHandleAlt withHandle className="bg-transparent text-text-primary" />
         )}
         <ResizablePanel
           tagName="nav"
@@ -249,17 +254,17 @@ const SidePanel = ({
             localStorage.setItem('react-resizable-panels:collapsed', 'true');
           }}
           className={cn(
-            'sidenav hide-scrollbar border-l border-border-light bg-surface-primary-alt transition-opacity',
+            'sidenav hide-scrollbar border-l border-border-light bg-background transition-opacity',
             isCollapsed ? 'min-w-[50px]' : 'min-w-[340px] sm:min-w-[352px]',
             (isSmallScreen && isCollapsed && (minSize === 0 || collapsedSize === 0)) || fullCollapse
               ? 'hidden min-w-0'
               : 'opacity-100',
           )}
         >
-          {interfaceConfig.modelSelect && (
+          {interfaceConfig.modelSelect === true && (
             <div
               className={cn(
-                'sticky left-0 right-0 top-0 z-[100] flex h-[52px] flex-wrap items-center justify-center bg-surface-primary-alt',
+                'sticky left-0 right-0 top-0 z-[100] flex h-[52px] flex-wrap items-center justify-center bg-background',
                 isCollapsed ? 'h-[52px]' : 'px-2',
               )}
             >
